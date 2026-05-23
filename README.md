@@ -1,11 +1,29 @@
 # Advanced Camera Page
 
-Advanced Camera Page is a lightweight Flask-based web gallery intended to run on a Raspberry Pi or similar small Linux host. It serves a local `Cam_Now` directory containing still images and MP4/MOV video files, groups matching image/video files into camera cards, and uses a user-editable CSV file for camera descriptions and metadata.
+Advanced Camera Page is a lightweight Flask-based web gallery intended to run on a Raspberry Pi or similar small Linux host. It serves a local `Cam_Now` directory containing still images and MP4/MOV video files, groups matching image/video files into **camera cards**, and uses a user-editable CSV file for camera descriptions and metadata.
+
+A **camera card** is the visible gallery tile for one camera/source. Each camera card can contain:
+
+- one still image
+- one video file
+- or a matched still image + video file pair
+
+The still image and video are grouped together when they share the same filename base / group.
+
+Example:
+
+```text
+KJ6DZB-G5.jpeg  -> group: KJ6DZB-G5
+KJ6DZB-G5.mp4   -> group: KJ6DZB-G5
+```
+
+These two files display together inside **one camera card**.
 
 The current design is meant for a simple camera-wall / mesh-camera workflow:
 
 - Drop current image/video files into one folder.
 - The app discovers them automatically.
+- Matching still/video pairs are grouped into one camera card.
 - The app keeps a metadata CSV in sync.
 - The user edits descriptions, enable/disable status, live URLs, and notes in that CSV.
 - The web page reflects the metadata without hardcoding cameras into HTML.
@@ -64,6 +82,43 @@ The app ignores:
 
 ---
 
+## Camera Cards and Media Grouping
+
+The gallery displays media as **camera cards**.
+
+A camera card is created from a discovered media group. The group is normally the filename without the extension.
+
+Examples:
+
+```text
+4cam.jpeg       -> camera card/group: 4cam
+4cam.mp4        -> camera card/group: 4cam
+
+KJ6DZB-G5.jpeg  -> camera card/group: KJ6DZB-G5
+KJ6DZB-G5.mp4   -> camera card/group: KJ6DZB-G5
+
+SFWEM_meshy.png -> camera card/group: SFWEM_meshy
+```
+
+When a still image and video file share the same group, they display together inside one camera card:
+
+```text
+4cam.jpeg
+4cam.mp4
+```
+
+Result:
+
+```text
+Camera Card: 4cam
+  - still image
+  - video
+```
+
+The template intentionally groups by the `f.group` value produced by `app.py`, not by hardcoded HTML. This keeps image/video pairing consistent and lets the backend control grouping rules if they change later.
+
+---
+
 ## How Auto-Discovery Works
 
 Auto-discovery happens automatically whenever the main page is loaded and when the `/discover` endpoint is requested.
@@ -110,11 +165,11 @@ Column meanings:
 
 | Column | Purpose |
 |---|---|
-| `group` | Required. Must match the filename base without extension. |
-| `description` | Human-readable card label shown above the media. |
-| `enabled` | Use `yes` to show a camera, `no` to hide it. Blank defaults to `yes`. |
+| `group` | Required. Must match the filename base without extension. This is the camera card ID. |
+| `description` | Human-readable camera card label shown above the media. |
+| `enabled` | Use `yes` to show a camera card, `no` to hide it. Blank defaults to `yes`. |
 | `sort_order` | Optional numeric sort hint for CSV organization. Lower numbers sort earlier in the CSV. |
-| `live_url` | Optional live camera/feed URL associated with the card. |
+| `live_url` | Optional live camera/feed URL associated with the camera card. |
 | `notes` | Freeform admin notes. Not required for display. |
 
 Example:
@@ -142,7 +197,7 @@ chabot-cam,Chabot Space & Science Center,yes,50,http://camera-host.local/live,li
 
 The Flask app loads `live_url` values and passes them to the template as `live_urls`.
 
-The template can then show a `LIVE` button or link when a live URL exists for a card.
+The template shows a `LIVE` button/link when a live URL exists for a camera card.
 
 Suggested Jinja usage inside a card loop:
 
@@ -159,7 +214,7 @@ This allows live camera links to be added without editing Python or HTML. Only t
 
 ## Disabled-Camera Support
 
-A camera can be hidden without removing its image/video files.
+A camera card can be hidden without removing its image/video files.
 
 Set `enabled` to `no`:
 
@@ -170,8 +225,8 @@ old-camera,Old test camera,no,999,,not currently used
 
 Behavior:
 
-- `enabled=yes` or blank: camera is visible.
-- `enabled=no`: camera is hidden from the gallery.
+- `enabled=yes` or blank: camera card is visible.
+- `enabled=no`: camera card is hidden from the gallery.
 - The row remains in the CSV, so it can be re-enabled later.
 - Auto-discovery does not delete disabled rows.
 
@@ -279,7 +334,7 @@ Example response:
 
 6. Refresh the gallery page.
 
-The new card should now appear with its description and optional live link.
+The new camera card should now appear with its description, grouped still/video media, and optional live link.
 
 ---
 
@@ -318,10 +373,12 @@ Template-only changes usually require only a browser refresh. Python changes req
 
 ## Current Design Notes
 
-- Camera grouping is based on exact filename base.
-- New cameras are added to CSV automatically.
+- A visible gallery unit is called a **camera card**.
+- Camera cards are grouped by exact filename base / backend `f.group`.
+- A still image and video with the same group display together in one camera card.
+- New camera cards are added to CSV automatically.
 - Existing descriptions are preserved.
-- Disabled cameras are hidden but not deleted.
+- Disabled camera cards are hidden but not deleted.
 - Live links are metadata-driven.
 - `/health` and `/discover` are intended for operation and troubleshooting.
 - Xastir capture tools are intentionally not included in this repo at this stage.
