@@ -73,7 +73,8 @@
       color: #e8eef5;
     }
 
-    .apply-btn {
+    .apply-btn,
+    .live-link {
       color: #5fb3ff;
       border-color: #5fb3ff;
       font-weight: 600;
@@ -156,7 +157,7 @@
 <header>
   <div class="title">Advanced Camera Page</div>
   <div class="subtitle">
-    Current camera images and videos. Matching image/video files are grouped into one card by their discovered camera group.
+    Current camera images and videos. Matching still/video files are grouped into one camera card, with a LIVE link shown when the camera card has a live_url in descriptions.csv.
   </div>
 
   <form class="controls" method="get" action="/">
@@ -193,9 +194,8 @@
 
   <div class="grid">
     {#
-      IMPORTANT:
       app.py assigns each media file a stable f.group value.
-      Group by f.group, not by recomputing from f.name, so image/video pairs stay together.
+      Group by f.group so one camera card can contain its still image, video, and optional LIVE link.
     #}
     {% set groups = {} %}
     {% for f in files %}
@@ -237,7 +237,7 @@
           {% set live_url = (live_urls.get(base, '') or '').strip() %}
           {% if live_url %}
             <div style="margin-bottom: 8px;">
-              <a class="btnlink apply-btn" href="{{ live_url }}" target="_blank" rel="noopener">LIVE</a>
+              <a class="btnlink live-link" href="{{ live_url }}" target="_blank" rel="noopener">LIVE</a>
             </div>
           {% endif %}
 
@@ -250,7 +250,7 @@
 </div>
 
 <footer>
-  Advanced Camera Page. Auto-discovery and card metadata are managed through descriptions.csv.
+  Advanced Camera Page. Each camera card can show a still image, video, and optional LIVE link from descriptions.csv.
 </footer>
 
 <script>
