@@ -13,6 +13,7 @@ MEDIA_EXTS = IMAGE_EXTS | VIDEO_EXTS
 
 DEFAULT_DESCRIPTIONS_FILE = "/opt/camnow_gallery/descriptions.csv"
 CSV_FIELDS = ["group", "description", "enabled", "sort_order", "live_url", "notes"]
+EXCLUDED_NAME_SUBSTRINGS = {"conflict"}
 
 
 def natural_key(value: str):
@@ -31,10 +32,18 @@ def media_group(filename: str) -> str:
     return Path(filename).stem.strip()
 
 
+def is_excluded_filename(filename: str) -> bool:
+    """Return True for generated/conflict files that should never be displayed or onboarded."""
+    lowered = filename.lower()
+    return any(token in lowered for token in EXCLUDED_NAME_SUBSTRINGS)
+
+
 def is_good_media_file(path: Path) -> bool:
     if path.name.startswith("."):
         return False
     if path.name.endswith(".tmp"):
+        return False
+    if is_excluded_filename(path.name):
         return False
     if path.suffix.lower() not in MEDIA_EXTS:
         return False
@@ -149,6 +158,8 @@ def list_media(root: Path, rel: Path, q: str = "", sort: str = "mtime", desc: bo
         for p in target.iterdir():
             if p.name.startswith("."):
                 continue
+            if is_excluded_filename(p.name):
+                continue
             if q_lower and q_lower not in p.name.lower():
                 continue
             if p.is_dir():
@@ -253,6 +264,7 @@ def create_app():
             "groups_found_in_media_folder": result["groups_found"],
             "known_groups_in_csv": result["known"],
             "unreadable": result["unreadable"],
+            "excluded_name_substrings": sorted(EXCLUDED_NAME_SUBSTRINGS),
         })
 
     @app.route("/health")
@@ -263,6 +275,7 @@ def create_app():
             "media_root_exists": root.exists(),
             "descriptions_file": str(descriptions_file),
             "descriptions_file_exists": descriptions_file.exists(),
+            "excluded_name_substrings": sorted(EXCLUDED_NAME_SUBSTRINGS),
         })
 
     @app.route("/media/<path:subpath>")
@@ -271,6 +284,8 @@ def create_app():
         if not safe_child(root, full):
             abort(403)
         if not full.exists() or not full.is_file():
+            abort(404)
+        if is_excluded_filename(full.name):
             abort(404)
         return send_from_directory(root, subpath)
 
