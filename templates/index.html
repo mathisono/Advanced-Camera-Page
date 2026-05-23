@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Advanced Camera Page</title>
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      margin: 0;
+      background: #0b0f14;
+      color: #e8eef5;
+    }
+
+    header {
+      padding: 14px 16px;
+      background: #111a24;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      border-bottom: 1px solid #1f2c3a;
+    }
+
+    a {
+      color: #7cc4ff;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .title {
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      opacity: .82;
+      font-size: 13px;
+      line-height: 1.4;
+      max-width: 1100px;
+    }
+
+    .wrap {
+      padding: 16px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      align-items: center;
+    }
+
+    input,
+    select {
+      background: #0f1720;
+      border: 1px solid #243241;
+      color: #e8eef5;
+      padding: 8px 10px;
+      border-radius: 10px;
+    }
+
+    .btnlink {
+      display: inline-block;
+      padding: 6px 10px;
+      border: 1px solid #1f2c3a;
+      border-radius: 10px;
+      background: #0f1720;
+      color: #e8eef5;
+    }
+
+    .apply-btn {
+      color: #5fb3ff;
+      border-color: #5fb3ff;
+      font-weight: 600;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      background: #0f1720;
+      border: 1px solid #1f2c3a;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 8px 30px rgba(0,0,0,.25);
+    }
+
+    .card-label {
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #9ccfff;
+      background: #0b1320;
+      border-bottom: 1px solid #1f2c3a;
+      text-align: center;
+    }
+
+    .thumb {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 6px;
+      background: #0b0f14;
+    }
+
+    .thumb img,
+    .thumb video {
+      width: 100%;
+      object-fit: cover;
+      border-radius: 10px;
+      display: block;
+    }
+
+    .meta {
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+
+    .name {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 6px;
+      word-break: break-word;
+    }
+
+    .small {
+      opacity: 0.8;
+    }
+
+    .error {
+      margin: 10px 0 16px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255, 86, 86, .12);
+      border: 1px solid rgba(255, 86, 86, .25);
+      color: #ffd2d2;
+    }
+
+    footer {
+      padding: 18px 16px;
+      font-size: 12px;
+      opacity: 0.7;
+    }
+  </style>
+</head>
+
+<body>
+<header>
+  <div class="title">Advanced Camera Page</div>
+  <div class="subtitle">
+    Current camera images and videos. Matching image/video files are grouped into one card by their discovered camera group.
+  </div>
+
+  <form class="controls" method="get" action="/">
+    <input name="q" placeholder="filter name…" value="{{ request.args.get('q','') }}"/>
+
+    <select name="sort">
+      <option value="mtime" {% if request.args.get('sort','mtime')=='mtime' %}selected{% endif %}>Sort: newest</option>
+      <option value="name" {% if request.args.get('sort','mtime')=='name' %}selected{% endif %}>Sort: name</option>
+    </select>
+
+    <select name="desc">
+      <option value="1" {% if request.args.get('desc','1')=='1' %}selected{% endif %}>Order: desc</option>
+      <option value="0" {% if request.args.get('desc','1')=='0' %}selected{% endif %}>Order: asc</option>
+    </select>
+
+    <label style="opacity:.85;">Auto-refresh</label>
+    <select name="refresh">
+      {% set r = request.args.get('refresh', (refresh|string)) %}
+      <option value="0" {% if r=='0' %}selected{% endif %}>Off</option>
+      <option value="120" {% if r=='120' %}selected{% endif %}>2m</option>
+      <option value="240" {% if r=='240' %}selected{% endif %}>4m</option>
+      <option value="600" {% if r=='600' %}selected{% endif %}>10m</option>
+    </select>
+
+    <button class="btnlink apply-btn" type="submit">Apply</button>
+    <a class="btnlink" href="/">Clear</a>
+  </form>
+</header>
+
+<div class="wrap">
+  {% if err %}
+    <div class="error">{{ err }}</div>
+  {% endif %}
+
+  <div class="grid">
+    {#
+      IMPORTANT:
+      app.py assigns each media file a stable f.group value.
+      Group by f.group, not by recomputing from f.name, so image/video pairs stay together.
+    #}
+    {% set groups = {} %}
+    {% for f in files %}
+      {% set base = f.group %}
+      {% if base not in groups %}
+        {% set _ = groups.update({ base: [] }) %}
+      {% endif %}
+      {% set _ = groups[base].append(f) %}
+    {% endfor %}
+
+    {% for base, items in groups.items() %}
+      <div class="card">
+        {% set desc = (descriptions.get(base, '') or '').strip() %}
+        {% if desc %}
+          <div class="card-label">{{ desc }}</div>
+        {% endif %}
+
+        <div class="thumb">
+          {% for f in items %}
+            {% if f.ext not in ['.mp4', '.m4v', '.mov'] %}
+              <img loading="lazy" src="/media/{{ f.path }}" alt="{{ f.name }}">
+            {% endif %}
+          {% endfor %}
+
+          {% for f in items %}
+            {% if f.ext in ['.mp4', '.m4v', '.mov'] %}
+              <video controls preload="metadata">
+                <source src="/media/{{ f.path }}" type="video/mp4">
+              </video>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        <div class="meta">
+          {% if not desc %}
+            <div class="name">{{ base }}</div>
+          {% endif %}
+
+          {% set live_url = (live_urls.get(base, '') or '').strip() %}
+          {% if live_url %}
+            <div style="margin-bottom: 8px;">
+              <a class="btnlink apply-btn" href="{{ live_url }}" target="_blank" rel="noopener">LIVE</a>
+            </div>
+          {% endif %}
+
+          {% set newest = items | map(attribute='mtime') | list | sort | last %}
+          <div class="small">{{ newest }}</div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<footer>
+  Advanced Camera Page. Auto-discovery and card metadata are managed through descriptions.csv.
+</footer>
+
+<script>
+  (function () {
+    const params = new URLSearchParams(window.location.search);
+    const refresh = parseInt(params.get("refresh") || "0", 10);
+    if (!Number.isFinite(refresh) || refresh <= 0) return;
+    setTimeout(() => window.location.reload(), refresh * 1000);
+  })();
+</script>
+</body>
+</html>
