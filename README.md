@@ -6,7 +6,8 @@ A **camera card** is the visible gallery tile for one camera/source. Each camera
 
 - one still image
 - one video file
-- or a matched still image + video file pair
+- an optional LIVE link
+- or a matched still image + video file pair with an optional LIVE link
 
 The still image and video are grouped together when they share the same filename base / group.
 
@@ -17,13 +18,14 @@ KJ6DZB-G5.jpeg  -> group: KJ6DZB-G5
 KJ6DZB-G5.mp4   -> group: KJ6DZB-G5
 ```
 
-These two files display together inside **one camera card**.
+These two files display together inside **one camera card**. If `KJ6DZB-G5` has a `live_url` in `descriptions.csv`, the same camera card also shows a LIVE button.
 
 The current design is meant for a simple camera-wall / mesh-camera workflow:
 
 - Drop current image/video files into one folder.
 - The app discovers them automatically.
 - Matching still/video pairs are grouped into one camera card.
+- Optional LIVE links are read from CSV metadata.
 - The app keeps a metadata CSV in sync.
 - The user edits descriptions, enable/disable status, live URLs, and notes in that CSV.
 - The web page reflects the metadata without hardcoding cameras into HTML.
@@ -79,6 +81,18 @@ The app ignores:
 - zero-byte files
 - files with unsupported extensions
 - unreadable or broken media entries
+- files whose names contain `conflict` anywhere, case-insensitive
+
+Examples of ignored conflict files:
+
+```text
+4cam (conflict).jpeg
+KJ6DZB-G5_conflict.mp4
+conflict-test.png
+MyCamera-CONFLICT.mov
+```
+
+Conflict files are excluded from display, auto-discovery, CSV onboarding, and direct `/media/` serving.
 
 ---
 
@@ -113,6 +127,7 @@ Result:
 Camera Card: 4cam
   - still image
   - video
+  - LIVE link if live_url is configured
 ```
 
 The template intentionally groups by the `f.group` value produced by `app.py`, not by hardcoded HTML. This keeps image/video pairing consistent and lets the backend control grouping rules if they change later.
@@ -133,6 +148,8 @@ KJ6DZB-G5.mp4      -> group: KJ6DZB-G5
 SFWEM_meshy.png    -> group: SFWEM_meshy
 KJ6DZB_4_MAP.png   -> group: KJ6DZB_4_MAP
 ```
+
+Files containing `conflict` in the filename are skipped before discovery, so they do not create camera cards and are not added to `descriptions.csv`.
 
 If a discovered group is missing from `descriptions.csv`, the app automatically adds a new row with blank metadata:
 
@@ -204,7 +221,7 @@ Suggested Jinja usage inside a card loop:
 ```jinja2
 {% set live_url = (live_urls.get(base, '') or '').strip() %}
 {% if live_url %}
-  <a class="btnlink apply-btn" href="{{ live_url }}" target="_blank" rel="noopener">LIVE</a>
+  <a class="btnlink live-link" href="{{ live_url }}" target="_blank" rel="noopener">LIVE</a>
 {% endif %}
 ```
 
@@ -234,6 +251,33 @@ This is useful for cameras that are temporarily offline, retired, or under test.
 
 ---
 
+## Conflict Filename Exclusion
+
+The app excludes any media file whose filename contains:
+
+```text
+conflict
+```
+
+The match is case-insensitive.
+
+This is intended to prevent sync/merge conflict artifacts from appearing as duplicate camera cards or being added to `descriptions.csv`.
+
+Excluded files are skipped in four places:
+
+- gallery display
+- `/discover` auto-discovery
+- automatic CSV onboarding
+- direct `/media/<file>` serving
+
+The active exclusion list is also reported by `/health` and `/discover` as:
+
+```json
+"excluded_name_substrings": ["conflict"]
+```
+
+---
+
 ## Health Checking
 
 The app provides a simple health endpoint:
@@ -256,7 +300,8 @@ Example response:
   "media_root": "/home/kj6dzb/2/MSE-87/Cam_Now",
   "media_root_exists": true,
   "descriptions_file": "/opt/camnow_gallery/descriptions.csv",
-  "descriptions_file_exists": true
+  "descriptions_file_exists": true,
+  "excluded_name_substrings": ["conflict"]
 }
 ```
 
@@ -265,6 +310,7 @@ Use `/health` to quickly verify that:
 - the Flask app is running
 - the configured media directory exists
 - the descriptions CSV exists
+- the active filename exclusion rules are loaded
 
 This is useful for systemd checks, troubleshooting, and quick status checks from another host.
 
@@ -293,11 +339,12 @@ Example response:
   "added_new_groups": ["new-camera"],
   "groups_found_in_media_folder": ["KJ6DZB-G5", "new-camera"],
   "known_groups_in_csv": ["KJ6DZB-G5", "new-camera"],
-  "unreadable": []
+  "unreadable": [],
+  "excluded_name_substrings": ["conflict"]
 }
 ```
 
-`/discover` is useful when adding or troubleshooting cameras because it shows exactly what the app sees in the media folder and what it added to the CSV.
+`/discover` is useful when adding or troubleshooting cameras because it shows exactly what the app sees in the media folder, what it added to the CSV, and which filename exclusions are active.
 
 ---
 
@@ -335,6 +382,8 @@ Example response:
 6. Refresh the gallery page.
 
 The new camera card should now appear with its description, grouped still/video media, and optional live link.
+
+If the filename contains `conflict`, it will be ignored and will not be onboarded.
 
 ---
 
@@ -376,9 +425,11 @@ Template-only changes usually require only a browser refresh. Python changes req
 - A visible gallery unit is called a **camera card**.
 - Camera cards are grouped by exact filename base / backend `f.group`.
 - A still image and video with the same group display together in one camera card.
+- Camera cards can include optional LIVE links from `live_url`.
 - New camera cards are added to CSV automatically.
 - Existing descriptions are preserved.
 - Disabled camera cards are hidden but not deleted.
+- Files containing `conflict` are excluded from display, discovery, onboarding, and direct media serving.
 - Live links are metadata-driven.
 - `/health` and `/discover` are intended for operation and troubleshooting.
 - Xastir capture tools are intentionally not included in this repo at this stage.
